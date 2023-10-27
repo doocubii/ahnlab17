@@ -77,11 +77,21 @@ def print_result(result: Any) -> None:
 
 llm = ChatOpenAI(model_name=llm_model, temperature=0)
 
-
+from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 
-def get_qa(vectordb) -> ConversationalRetrievalChain:
+def get_template(langauge='English')->PromptTemplate:
+  template = f"""Use the following pieces of context to answer the question at the end. \
+    If you don't know the answer, just say that you don't know, don't try to make up an answer. \
+    If the question is not in {langauge}, translate it into {langauge} and answer in the same language as the question.
+    {{context}}
+    Question: {{question}}
+    Helpful Answer:"""
+  return PromptTemplate.from_template(template)
+
+
+def get_qa(vectordb, template = None) -> ConversationalRetrievalChain:
   memory = ConversationBufferMemory(
     memory_key="chat_history",
     output_key='answer',
@@ -93,9 +103,11 @@ def get_qa(vectordb) -> ConversationalRetrievalChain:
       retriever=retriever,
       return_source_documents=True,
       return_generated_question=True,
-      memory=memory
+      memory=memory,
+      prompt= template
   )
   return qa
+
 
 
 
@@ -112,9 +124,9 @@ def test_memory(vectordb, questions, is_debug=False)-> None:
 
 
 
-def chat_qa(vectordb, is_debug=False) -> None:
+def chat_qa(vectordb, language, is_debug=False) -> None:
   console = ConsoleInput(basic_prompt='% ')
-  qa = get_qa(vectordb)
+  qa = get_qa(vectordb, get_template(language))
 
 
   while True:  # 무한루프 시작
@@ -146,7 +158,7 @@ def input_select(menu: dict) -> (int, str):
 
   if items == None or len(items) == 0:
      raise ValueError("menu에 items가 없습니다.")
-  for idx, item in items:
+  for idx, item in enumerate(items):
     print(f"{str(idx+1)}. {item}")
 
   size = len(items)
@@ -184,7 +196,7 @@ def main():
     ]
   })
   debug, _ = input_select({
-    "title" : "debuging 모드로 하시겠습니까?",
+    "title" : "debugging 모드로 하시겠습니까?",
     "items" : [
       "yes",
       "no"
@@ -209,7 +221,7 @@ def main():
       is_debug
     )
   else:
-    chat_qa(vectordb, is_debug)
+    chat_qa(vectordb,"Korean" if db == 1 else "English", is_debug)
 
 
 
