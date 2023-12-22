@@ -23,7 +23,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 openai.organization = os.getenv("ORGANIZATION")
 sys.path.append(os.getenv("PYTHONPATH"))
 llm_model = "gpt-3.5-turbo"
-PDF_FILE = "./data/프리랜서 가이드라인 (출판본).pdf"
+# PDF_FILE = "./data/프리랜서 가이드라인 (출판본).pdf"
+PDF_FILE = "./data/말잘하는아이글 잘 쓰는 아이_본문.pdf"
 CSV_FILE = "data/OutdoorClothingCatalog_1000.csv"
 
 from langchain.vectorstores import FAISS

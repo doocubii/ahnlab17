@@ -16,72 +16,204 @@ db 값은
 
 
 -->
+<!DOCTYPE html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Simple SPA</title>
     <style>
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 0;
+      }
+
+      #db-div,
+      #chat-div {
+        max-width: 600px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
       .chat-messages {
-        border: 1px solid black;
-        height: 300px;
-        overflow: auto;
-        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        height: 735px;
+        overflow-y: auto;
+        padding: 10px;
+        background-color: #fafafa;
       }
 
       .message {
-        padding: 5px;
-        border-bottom: 1px solid #ccc;
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 5px;
       }
 
-      #db-div {
-        display: block;
+      .user-message {
+        text-align: right;
+        background-color: #dcf8c6;
       }
 
-      #chat-div {
-        display: none;
+      .server-message {
+        text-align: left;
+        background-color: #ebebeb;
       }
 
-      #prompt-div {
-        width: 100%;
+      button {
+        cursor: pointer;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        background-color: #009688;
+        color: white;
+        margin-top: 10px;
+      }
+
+      button:hover {
+        background-color: #00796b;
+      }
+
+      select,
+      input[type="text"] {
+        padding: 10px;
+        margin-top: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: calc(100% - 22px);
       }
     </style>
   </head>
   <body>
+    <!-- DB Selection -->
     <div id="db-div">
       <label for="db">Choose a DB:</label>
-      <select id="db">
-        <option value="1">프리랜서로 사는 법</option>
-        <option value="2">쇼핑몰 카탈로그</option>
-      </select>
+      <select id="db"></select>
       <button onclick="getToken()">Submit</button>
     </div>
 
+    <!-- Chat Interface -->
     <div id="chat-div">
       <div class="chat-messages" id="chat-messages"></div>
-
       <div id="prompt-div">
-        <label for="prompt">Enter prompt:</label>
         <input
           type="text"
           id="prompt"
+          placeholder="Type your message..."
           onkeydown="if(event.keyCode==13) submitPrompt();"
         />
-        <button onclick="submitPrompt()">Submit</button>
+        <button onclick="submitPrompt()">Send</button>
       </div>
     </div>
 
     <script>
       let currentToken = null;
 
+      // 페이지 로드 시 사용자 입력창을 숨기는 함수를 추가합니다.
+      window.onload = function () {
+        document.getElementById("prompt-div").style.display = "none"; // 사용자 입력창을 숨깁니다.
+        document.getElementById("chat-div").style.display = "none"; // 채팅창도 초기에는 숨깁니다.
+        get_list();
+      };
+
+      function get_list() {
+        fetch("/api/get_list") // API 호출
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Network response was not ok");
+            }
+            return response.json(); // 응답을 JSON 형태로 파싱
+          })
+          .then((data) => {
+            const selectElement = document.getElementById("db");
+
+            // 데이터 리스트를 순회하면서 option 요소 추가
+            data.list.forEach(function (item) {
+              const option = document.createElement("option");
+              option.value = item.idx;
+              option.textContent = item.title;
+              selectElement.appendChild(option);
+              console.log("add list : " + item.idx + "." + item.title);
+            });
+          })
+          .catch((error) => {
+            console.error(
+              "There was a problem with the fetch operation:",
+              error
+            );
+          });
+      }
+
+      function get_summary(callback) {
+        fetch("/api/summary?token=" + currentToken) // API 호출
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Network response was not ok");
+            }
+            return response.json(); // 응답을 JSON 형태로 파싱
+          })
+          .then((data) => {
+            callback(data.summary);
+          })
+          .catch((error) => {
+            console.error(
+              "There was a problem with the fetch operation:",
+              error
+            );
+          });
+      }
+
+      function formatResult(originalString) {
+        // 임시 플레이스홀더로 대체
+        let tempString = originalString
+          .replace(/\n/g, "{newline}")
+          .replace(/-----/g, "{newparagraph}");
+
+        // HTML 인코딩
+        let encodedString = tempString.replace(
+          /[\u00A0-\u9999<>\&]/gim,
+          function (i) {
+            return "&#" + i.charCodeAt(0) + ";";
+          }
+        );
+
+        // 플레이스홀더를 <br> 태그로 대체
+        encodedString = encodedString
+          .replace(/{newline}/g, "<br>\n")
+          .replace(/{newparagraph}/g, "<br><br>");
+
+        return encodedString;
+      }
+
       async function getToken() {
-        const db = document.getElementById("db").value;
-        const response = await fetch(`/api/new_token?db=${db}`);
-        const data = await response.json();
-        currentToken = data.token;
-        document.getElementById("db-div").style.display = "none"; // Hide the db input div
-        document.getElementById("chat-div").style.display = "block"; // Hide the db input div
-        alert("Token received!");
+        try {
+          const db = document.getElementById("db").value;
+          const response = await fetch(`/api/new_token?db=${db}`);
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+          const data = await response.json();
+          if (data.token) {
+            currentToken = data.token;
+            document.getElementById("db-div").style.display = "none";
+            document.getElementById("chat-div").style.display = "block"; // 채팅창을 표시합니다.
+            document.getElementById("prompt-div").style.display = "block"; // 사용자 입력창을 표시합니다.
+            console.log("Token received: " + currentToken);
+            get_summary((summary) => appendMessage(summary, "server-message"));
+          } else {
+            throw new Error("Token not found in response");
+          }
+        } catch (error) {
+          console.error("Error fetching token:", error);
+          alert(
+            "There was an error getting the token. Please check the console for more information."
+          );
+        }
       }
 
       async function submitPrompt() {
@@ -89,36 +221,28 @@ db 값은
           alert("Please get a token first!");
           return;
         }
-
         const promptValue = document.getElementById("prompt").value;
-        document.getElementById("prompt").value = ""; // Clear the input after submitting
+        document.getElementById("prompt").value = "";
 
-        const chatMessagesDiv = document.getElementById("chat-messages");
-
-        // Add user's message
-        const userMessageDiv = document.createElement("div");
-        userMessageDiv.className = "message user-message";
-        userMessageDiv.textContent = promptValue;
-        chatMessagesDiv.appendChild(userMessageDiv);
+        appendMessage("You: " + promptValue, "user-message");
 
         const response = await fetch("/api/prompt", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            token: currentToken,
-            prompt: promptValue,
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: currentToken, prompt: promptValue }),
         });
-
         const data = await response.json();
 
-        // Add server's response
-        const serverMessageDiv = document.createElement("div");
-        serverMessageDiv.className = "message server-message";
-        serverMessageDiv.textContent = data.result;
-        chatMessagesDiv.appendChild(serverMessageDiv);
+        appendMessage("Bot: " + data.result, "server-message");
+      }
+
+      function appendMessage(message, className) {
+        const chatMessagesDiv = document.getElementById("chat-messages");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${className}`;
+        messageDiv.innerHTML = formatResult(message);
+        chatMessagesDiv.appendChild(messageDiv);
+        chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
       }
     </script>
   </body>

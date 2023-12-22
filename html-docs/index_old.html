@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<!--
+
+위의 백엔드 서버에 기초해서 index.html을 만드는데
+
+1. react 같은 프레임워크를 쓰지 말고 순수 html과 js만 가지고 만들것.
+2. Single Page Application 으로 만들것.
+3. 페이지가 로딩되면 db 값을 입력 받을 것.
+db 값은
+1 : 프리랜서로 사는 법
+2 : 쇼핑몰 카탈로그
+로 설명하고 입력받을 것.
+4. /new_token에 이 db값을 전달하고 token값을 받아올 것. 이 token값은 저장해두고 이후에 계속 사용할 것.
+5. 사용자로 부터 프롬프트를 입력받고 이 값을 서버의 /prompt에 전달할 것. 이때 앞의 token값도 같이 보낼 것.
+6. 사용자의 prompt 값과 /prompt의 결과 값은 채팅창을 만들어서 보여줄 것.
+
+
+-->
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple SPA</title>
+    <style>
+      .chat-messages {
+        border: 1px solid black;
+        height: 300px;
+        overflow: auto;
+        margin-bottom: 10px;
+      }
+
+      .message {
+        padding: 5px;
+        border-bottom: 1px solid #ccc;
+      }
+
+      #db-div {
+        display: block;
+      }
+
+      #chat-div {
+        display: none;
+      }
+
+      #prompt-div {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="db-div">
+      <label for="db">Choose a DB:</label>
+      <select id="db">
+        <option value="1">프리랜서로 사는 법</option>
+        <option value="2">쇼핑몰 카탈로그</option>
+      </select>
+      <button onclick="getToken()">Submit</button>
+    </div>
+
+    <div id="chat-div">
+      <div class="chat-messages" id="chat-messages"></div>
+
+      <div id="prompt-div">
+        <label for="prompt">Enter prompt:</label>
+        <input
+          type="text"
+          id="prompt"
+          onkeydown="if(event.keyCode==13) submitPrompt();"
+        />
+        <button onclick="submitPrompt()">Submit</button>
+      </div>
+    </div>
+
+    <script>
+      let currentToken = null;
+
+      async function getToken() {
+        const db = document.getElementById("db").value;
+        const response = await fetch(`/api/new_token?db=${db}`);
+        const data = await response.json();
+        currentToken = data.token;
+        document.getElementById("db-div").style.display = "none"; // Hide the db input div
+        document.getElementById("chat-div").style.display = "block"; // Hide the db input div
+        alert("Token received!");
+      }
+
+      async function submitPrompt() {
+        if (!currentToken) {
+          alert("Please get a token first!");
+          return;
+        }
+
+        const promptValue = document.getElementById("prompt").value;
+        document.getElementById("prompt").value = ""; // Clear the input after submitting
+
+        const chatMessagesDiv = document.getElementById("chat-messages");
+
+        // Add user's message
+        const userMessageDiv = document.createElement("div");
+        userMessageDiv.className = "message user-message";
+        userMessageDiv.textContent = promptValue;
+        chatMessagesDiv.appendChild(userMessageDiv);
+
+        const response = await fetch("/api/prompt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token: currentToken,
+            prompt: promptValue,
+          }),
+        });
+
+        const data = await response.json();
+
+        // Add server's response
+        const serverMessageDiv = document.createElement("div");
+        serverMessageDiv.className = "message server-message";
+        serverMessageDiv.textContent = data.result;
+        chatMessagesDiv.appendChild(serverMessageDiv);
+      }
+    </script>
+  </body>
+</html>

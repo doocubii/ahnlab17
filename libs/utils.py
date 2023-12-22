@@ -9,6 +9,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import FAISS
 from langchain.vectorstores import Chroma
 from langchain.schema.vectorstore import VectorStore
+from langchain.chains.summarize import load_summarize_chain
+from langchain.prompts import PromptTemplate
 
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -314,7 +316,7 @@ def get_filename_without_extension(file_path):
   return file_name
 
 
-def split_docs(docs: Iterable[Document]) -> List[Document]:
+def split_docs(docs: Iterable[Document], chunk_size=1500) -> List[Document]:
   """
   문서를 분할하는 함수입니다.
 
@@ -322,7 +324,7 @@ def split_docs(docs: Iterable[Document]) -> List[Document]:
   :return: 분할된 Document 객체의 List
   """
   text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1500,
+    chunk_size=chunk_size,
     chunk_overlap=150
   )
 
@@ -331,7 +333,7 @@ def split_docs(docs: Iterable[Document]) -> List[Document]:
   return splits
 
 
-def load_pdf(file: str, with_split: bool = False) -> List[Document]:
+def load_pdf(file: str, with_split: bool = False, chunk_size=1500) -> List[Document]:
   """
   PDF 파일을 로드하는 함수입니다.
 
@@ -344,7 +346,7 @@ def load_pdf(file: str, with_split: bool = False) -> List[Document]:
   if not with_split:
     return pages
 
-  return split_docs(pages)
+  return split_docs(pages, chunk_size)
 
 
 def load_csv(file: str, with_split: bool = False) -> List[Document]:
@@ -512,3 +514,73 @@ def load_vectordb_from_file(file: str) -> VectorStore:
 
   vectordb = save_vectordb(OpenAIEmbeddings(), db_path, documents)
   return vectordb
+
+
+
+def save_text(file: str, text: str) -> bool:
+  # Extract directory from the file path
+  directory = os.path.dirname(file)
+
+  # If the directory does not exist, create it
+  if not os.path.exists(directory):
+    try:
+      os.makedirs(directory)
+    except OSError as error:
+      print(f"Error creating directory: {error}")
+      return False
+
+  # Try to save the text to the file
+  try:
+    with open(file, 'w', encoding='utf-8') as f:
+      f.write(text)
+    return True
+  except IOError as error:
+    print(f"Error writing to file: {error}")
+    return False
+
+
+def read_text(file: str) -> str:
+  try:
+    with open(file, 'r', encoding='utf-8') as f:
+      return f.read()
+  except IOError as error:
+    print(f"Error reading file: {error}")
+    return ""
+
+
+def load_summary_from_file(llm, file: str, combine_template: str=None) -> str:
+  db_path = get_vectordb_path_by_file_path(file)
+  summary_file = db_path+"_summary.txt"
+
+  if os.path.exists(summary_file):
+    return read_text(summary_file)
+
+  docs = load_pdf(file, 8000)
+
+  template = '''다음의 내용을 6000자 이상의 한글로 요약해줘:
+
+{text}
+'''
+
+  prompt = PromptTemplate(template=template, input_variables=['text'])
+  combine_prompt = PromptTemplate(template=combine_template, input_variables=['text']) if combine_template is not None else None
+
+  params = {
+    "map_prompt" : prompt,
+    "combine_prompt" :combine_prompt,
+  }
+  # Summarize the content using TextRank algorithm
+  chain = load_summarize_chain(llm,
+                              chain_type="map_reduce",
+                              **{k: v for k, v in params.items() if v is not None}
+                              )
+  summary: str = chain.run(docs)
+
+
+
+  if not isinstance(summary, str):
+    raise ValueError("summary is not str")
+
+  if not save_text(summary_file, summary):
+    raise ValueError(f"'{summary_file}' can not save")
+  return summary
